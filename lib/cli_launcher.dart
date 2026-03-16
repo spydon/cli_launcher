@@ -347,7 +347,7 @@ ExecutableInstallation _findGlobalInstallation(ExecutableName executable) {
   )) {
     // The binary of an executable installed via `dart install` is located
     // in the `bundle/bin` directory within the package's app bundle.
-    // Structure: <install-dir>/app-bundles/<package>/<source>/bundle/bin/<executable>
+    // Structure: <install-dir>/app-bundles/<package>/<source>/<version?>/bundle/bin/<executable>
     // Platform.resolvedExecutable is used instead of Platform.script because
     // for AOT-compiled binaries, Platform.script may not contain the actual
     // binary path (e.g. when invoked via a shell).
