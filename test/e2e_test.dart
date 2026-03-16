@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('run global version', () {
+  test('run global version installed via pub global activate', () {
     final output = runExampleCli(workingDirectory: '.');
 
     expect(
@@ -47,6 +47,56 @@ void main() {
         ),
       );
     });
+  });
+
+  test('run global version installed via dart install', () {
+    // Install the example CLI via `dart install` which creates an
+    // AOT-compiled binary.
+    final installResult = Process.runSync(
+      'dart',
+      ['install', '.'],
+      workingDirectory: 'fixture_packages/example_v1',
+      stderrEncoding: utf8,
+      stdoutEncoding: utf8,
+    );
+    if (installResult.exitCode != 0) {
+      throw Exception(
+        'dart install failed with exit code ${installResult.exitCode}:'
+        '\n${installResult.stdout}\n${installResult.stderr}',
+      );
+    }
+
+    try {
+      // Run the dart-installed binary from a directory without a local
+      // installation, so it uses the global (dart install) version.
+      final result = Process.runSync(
+        'example',
+        [],
+        runInShell: true,
+        workingDirectory: '.',
+        stderrEncoding: utf8,
+        stdoutEncoding: utf8,
+      );
+
+      if (result.exitCode != 0) {
+        throw Exception(
+          'example CLI (dart install) failed with exit code ${result.exitCode}:'
+          '\n${result.stdout}\n${result.stderr}',
+        );
+      }
+
+      expect(
+        result.stdout as String,
+        matches(
+          RegExp(
+            '.*Running v1 with local version null and global version 1.0.0.*',
+          ),
+        ),
+      );
+    } finally {
+      // Uninstall to not interfere with other tests.
+      Process.runSync('dart', ['uninstall', 'cli_launcher_example']);
+    }
   });
 
   group('run in consumer package', () {
