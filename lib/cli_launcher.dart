@@ -747,19 +747,29 @@ Future<void> _launchFromGlobalInstallation(
       (localInstallation.isSelf ||
           localInstallation.isFromPath ||
           localInstallation.version != globalInstallation.version)) {
+    // We found a local installation which is different from the global
+    // installation so we launch the local installation, passing through
+    // stdio and exit code directly.
+    //
+    // When the local installation lives in a workspace that requires the
+    // Flutter SDK we launch it through `flutter pub run` instead of `dart run`.
+    // `dart run` implicitly resolves dependencies before running, and a plain
+    // `dart pub get` fails on a Flutter workspace with "requires the Flutter
+    // SDK". Using the Flutter tool keeps the launch consistent with how
+    // dependencies are resolved in [_updateDependencies].
+    final useFlutter = localInstallation.requiresFlutter;
     _debug(
-      'Launching local installation '
+      'Launching local installation via '
+      '"${useFlutter ? 'flutter pub run' : 'dart run'}" '
       '(isSelf: ${localInstallation.isSelf}, '
       'isFromPath: ${localInstallation.isFromPath}, '
       'local version: ${localInstallation.version}, '
       'global version: ${globalInstallation.version}).',
     );
-    // We found a local installation which is different from the global
-    // installation so we launch the local installation, passing through
-    // stdio and exit code directly.
     final process = await Process.start(
-      'dart',
+      useFlutter ? 'flutter' : 'dart',
       [
+        if (useFlutter) 'pub',
         'run',
         ...?localConfig?.dartRunArgs,
         config.name.toString(),
@@ -769,7 +779,8 @@ Future<void> _launchFromGlobalInstallation(
       ],
       mode: ProcessStartMode.inheritStdio,
       workingDirectory: localInstallation.packageRoot.path,
-      // Necessary so that `dart.bat` wrapper can be found on Windows.
+      // Necessary so that `dart.bat`/`flutter.bat` wrapper can be found on
+      // Windows.
       runInShell: Platform.isWindows,
     );
     exitCode = await process.exitCode;
