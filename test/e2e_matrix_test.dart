@@ -98,6 +98,35 @@ void main() {
           expect(stderr, contains('Launching local installation'));
         });
 
+        // --- Relaunch uses the Flutter tool for Flutter workspaces ---
+        //
+        // Regression test: launching a local installation implicitly resolves
+        // dependencies (`dart run` runs an implicit `dart pub get`). In a
+        // Flutter workspace a plain `dart pub get` fails with "requires the
+        // Flutter SDK", so the relaunch must go through the Flutter tool
+        // instead. This broke consumers such as supabase-flutter whose
+        // Dart-only CI activated a newer global melos than the workspace
+        // pinned, triggering a relaunch of the pinned version.
+        test('relaunch uses the correct SDK tool', () {
+          fixture!.ensureUpToDateTimestamps();
+
+          final (:stdout, :stderr) = fixture!.runCli(
+            workingDirectory: fixture!.consumerDir,
+          );
+          expect(stderr, contains('Launching local installation'));
+          if (structure == PackageStructure.flutterWorkspaceMember) {
+            expect(
+              stderr,
+              contains('Launching local installation via "flutter pub run"'),
+            );
+          } else {
+            expect(
+              stderr,
+              contains('Launching local installation via "dart run"'),
+            );
+          }
+        });
+
         // --- Consumer with dev_dependency ---
 
         test('launches from dev_dependency consumer', () {
