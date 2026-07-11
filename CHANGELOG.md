@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-07-11
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`cli_launcher` - `v0.3.3+2`](#cli_launcher---v0332)
+
+---
+
+#### `cli_launcher` - `v0.3.3+2`
+
+ - **FIX**: relaunch local installation with Flutter tool in Flutter workspaces ([#25](https://github.com/blaugold/cli_launcher/issues/25)). ([cdf6b7d1](https://github.com/blaugold/cli_launcher/commit/cdf6b7d1068670b9b363a3743ca4fcd2919ee87e))
+
+## 0.3.3+2
+
+ - **FIX**: relaunch local installation with Flutter tool in Flutter workspaces ([#25](https://github.com/blaugold/cli_launcher/issues/25)). ([cdf6b7d1](https://github.com/blaugold/cli_launcher/commit/cdf6b7d1068670b9b363a3743ca4fcd2919ee87e))
+
+
 ## 2026-03-17
 
 ### Changes
