@@ -309,6 +309,10 @@ void main() {
         // the PATH. An SDK path that does not exist proves that the tools are
         // taken from it, since the launch then fails with the tool path.
 
+        final sdkTool = structure == PackageStructure.flutterWorkspaceMember
+            ? 'flutter'
+            : 'dart';
+
         test('resolveLocalLaunchConfig uses sdkPath to launch', () {
           fixture!.ensureUpToDateTimestamps();
 
@@ -337,7 +341,13 @@ void main() {
               isA<Exception>().having(
                 (e) => e.toString(),
                 'message',
-                contains(p.join(sdkPath, 'bin')),
+                allOf(
+                  contains('Launching local installation'),
+                  contains(
+                    'Could not find the $sdkTool tool at '
+                    '${p.join(sdkPath, 'bin', sdkTool)}.',
+                  ),
+                ),
               ),
             ),
           );
@@ -371,7 +381,10 @@ void main() {
                   'message',
                   allOf(
                     contains('Dependencies are out of date. Running pub get.'),
-                    contains(p.join(sdkPath, 'bin')),
+                    contains(
+                      'Could not find the $sdkTool tool at '
+                      '${p.join(sdkPath, 'bin', sdkTool)}.',
+                    ),
                   ),
                 ),
               ),

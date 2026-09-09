@@ -594,8 +594,29 @@ class LocalLaunchConfig {
 /// Returns the path to [tool] in the `bin` directory of the SDK at [sdkPath],
 /// or just [tool] if no SDK path is given, so that it is resolved from the
 /// `PATH`.
+///
+/// Throws a [_LaunchError] if the tool does not exist in the SDK, since
+/// starting a non-existent tool fails differently depending on the platform and
+/// without a helpful message.
 String _sdkTool(String? sdkPath, String tool) {
-  return sdkPath == null ? tool : path.join(sdkPath, 'bin', tool);
+  if (sdkPath == null) {
+    return tool;
+  }
+  final toolPath = path.join(sdkPath, 'bin', tool);
+  final candidates = [
+    toolPath,
+    // On Windows the tools are batch files or executables, which the shell
+    // resolves from the extensionless path.
+    if (Platform.isWindows) ...['$toolPath.bat', '$toolPath.exe'],
+  ];
+  if (!candidates.any((candidate) => File(candidate).existsSync())) {
+    throw _LaunchError(
+      1,
+      'Could not find the $tool tool at $toolPath.\n'
+      'Check the sdkPath of the LocalLaunchConfig.',
+    );
+  }
+  return toolPath;
 }
 
 /// Returns the environment for processes that must use the SDK at [sdkPath],
