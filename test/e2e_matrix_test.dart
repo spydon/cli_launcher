@@ -301,6 +301,88 @@ void main() {
           // --enable-asserts is passed via dartRunArgs by resolveLocalLaunchConfig.
           expect(stdout, contains('Assertions are enabled.'));
         });
+
+        // --- runPubGet: false ---
+
+        test(
+          'out of date dependencies do not trigger pub get',
+          () {
+            final lockFileDir =
+                fixture!.workspaceRootDir ?? fixture!.consumerDir;
+            final pubspecFile = File(
+              p.join(fixture!.consumerDir, 'pubspec.yaml'),
+            );
+            final lockFile = File(p.join(lockFileDir, 'pubspec.lock'));
+
+            final now = DateTime.now();
+            pubspecFile.setLastModifiedSync(now);
+            lockFile.setLastModifiedSync(
+              now.subtract(const Duration(hours: 1)),
+            );
+
+            final (:stdout, :stderr) = fixture!.runCli(
+              workingDirectory: fixture!.consumerDir,
+              arguments: ['--no-pub'],
+            );
+            expect(stdout, contains('local=1.0.0'));
+            expect(
+              stderr,
+              contains('Dependencies are out of date, but pub get is disabled'),
+            );
+            expect(stderr, isNot(contains('Running pub get')));
+          },
+          skip:
+              installMethod == InstallMethod.pathActivated &&
+                  structure != PackageStructure.standalone
+              ? 'path-activated workspace shares lock file with global CLI'
+              : null,
+        );
+
+        // The local installation is launched without `dart run`, which would
+        // resolve dependencies implicitly, leaving the lock file untouched
+        // even though the pubspec asks for a dependency that is not in it.
+        test(
+          'launching does not resolve dependencies implicitly',
+          () {
+            final lockFileDir =
+                fixture!.workspaceRootDir ?? fixture!.consumerDir;
+            final pubspecFile = File(
+              p.join(fixture!.consumerDir, 'pubspec.yaml'),
+            );
+            final lockFile = File(p.join(lockFileDir, 'pubspec.lock'));
+
+            final pubspecContents = pubspecFile.readAsStringSync();
+            final lockContents = lockFile.readAsStringSync();
+
+            try {
+              pubspecFile.writeAsStringSync(
+                pubspecContents.replaceFirst(
+                  RegExp('^dependencies:', multiLine: true),
+                  'dependencies:\n  collection: ^1.19.0',
+                ),
+              );
+
+              final (:stdout, :stderr) = fixture!.runCli(
+                workingDirectory: fixture!.consumerDir,
+                arguments: ['--no-pub'],
+              );
+              expect(stdout, contains('local=1.0.0'));
+              expect(
+                stderr,
+                contains('Launching local installation via "dart"'),
+              );
+              expect(lockFile.readAsStringSync(), lockContents);
+            } finally {
+              pubspecFile.writeAsStringSync(pubspecContents);
+              lockFile.writeAsStringSync(lockContents);
+            }
+          },
+          skip:
+              installMethod == InstallMethod.pathActivated &&
+                  structure != PackageStructure.standalone
+              ? 'path-activated workspace shares lock file with global CLI'
+              : null,
+        );
       });
     }
   }
@@ -850,10 +932,14 @@ void main(List<String> args) {
           return true;
         }());
       },
-      resolveLocalLaunchConfig: args.contains('--local-launch-config')
+      resolveLocalLaunchConfig:
+          args.contains('--local-launch-config') || args.contains('--no-pub')
           ? (context) async {
               return LocalLaunchConfig(
-                dartRunArgs: ['--enable-asserts'],
+                dartRunArgs: args.contains('--local-launch-config')
+                    ? ['--enable-asserts']
+                    : null,
+                runPubGet: !args.contains('--no-pub'),
               );
             }
           : null,
