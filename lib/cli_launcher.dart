@@ -253,14 +253,16 @@ class ExecutableInstallation {
     return upToDate;
   }
 
-  Future<void> _updateDependencies([List<String>? pubGetArgs]) async {
-    final command = requiresFlutter ? 'flutter' : 'dart';
+  Future<void> _updateDependencies(LocalLaunchConfig? config) async {
+    final sdkPath = config?.sdkPath;
+    final command = _sdkTool(sdkPath, requiresFlutter ? 'flutter' : 'dart');
     final result = await _runProcess(
       command,
-      ['pub', 'get', if (pubGetArgs != null) ...pubGetArgs],
+      ['pub', 'get', ...?config?.pubGetArgs],
       // For workspace members, run from the workspace root so that path
       // dependencies are resolved consistently with the existing pubspec.lock.
       workingDirectory: lockFileRoot.path,
+      environment: _sdkEnvironment(sdkPath),
     );
     if (result.exitCode != 0) {
       throw _LaunchError(
@@ -569,7 +571,7 @@ typedef ResolveLocalLaunchConfig =
 /// Configuration options for launching a local installation of an executable.
 class LocalLaunchConfig {
   /// Creates a new local launch configuration.
-  LocalLaunchConfig({this.pubGetArgs, this.dartRunArgs});
+  LocalLaunchConfig({this.pubGetArgs, this.dartRunArgs, this.sdkPath});
 
   /// Additional arguments to pass to `dart pub get` when dependencies are out
   /// of date.
@@ -577,6 +579,48 @@ class LocalLaunchConfig {
 
   /// Additional arguments to pass to `dart run` when launching the executable.
   final List<String>? dartRunArgs;
+
+  /// The path to the Dart or Flutter SDK that is used to resolve dependencies
+  /// and launch the local installation.
+  ///
+  /// The `dart` and `flutter` tools are taken from the `bin` directory of this
+  /// SDK, and that directory is prepended to the `PATH` of the started
+  /// processes, so that the tools and the launched executable use the same SDK.
+  ///
+  /// When `null`, the tools are resolved from the `PATH`.
+  final String? sdkPath;
+}
+
+/// Returns the path to [tool] in the `bin` directory of the SDK at [sdkPath],
+/// or just [tool] if no SDK path is given, so that it is resolved from the
+/// `PATH`.
+String _sdkTool(String? sdkPath, String tool) {
+  return sdkPath == null ? tool : path.join(sdkPath, 'bin', tool);
+}
+
+/// Returns the environment for processes that must use the SDK at [sdkPath],
+/// with the `bin` directory of the SDK prepended to the `PATH`.
+///
+/// Returns `null` if no SDK path is given, so that the environment of the
+/// current process is inherited unchanged.
+Map<String, String>? _sdkEnvironment(String? sdkPath) {
+  if (sdkPath == null) {
+    return null;
+  }
+  // Environment variable names are case-insensitive on Windows, so the
+  // existing key is reused to avoid ending up with two `PATH` entries.
+  final pathKey = Platform.environment.keys.firstWhere(
+    (key) => key.toUpperCase() == 'PATH',
+    orElse: () => 'PATH',
+  );
+  final separator = Platform.isWindows ? ';' : ':';
+  final currentPath = Platform.environment[pathKey];
+  return {
+    pathKey: [
+      path.join(sdkPath, 'bin'),
+      if (currentPath != null && currentPath.isNotEmpty) currentPath,
+    ].join(separator),
+  };
 }
 
 /// An error that indicates the launch process failed with a specific exit code.
@@ -615,11 +659,13 @@ Future<_ProcessOutput> _runProcess(
   String executable,
   List<String> arguments, {
   String? workingDirectory,
+  Map<String, String>? environment,
 }) async {
   final process = await Process.start(
     executable,
     arguments,
     workingDirectory: workingDirectory,
+    environment: environment,
     // Necessary so that `dart.bat`/`flutter.bat` wrapper can be found on
     // Windows.
     runInShell: Platform.isWindows,
@@ -740,7 +786,7 @@ Future<void> _launchFromGlobalInstallation(
     // Ensure that dependencies are up to date so that we can resolve the
     // version of the local installation.
     _debug('Dependencies are out of date. Running pub get.');
-    await localInstallation._updateDependencies(localConfig?.pubGetArgs);
+    await localInstallation._updateDependencies(localConfig);
   }
 
   if (localInstallation != null &&
@@ -758,6 +804,7 @@ Future<void> _launchFromGlobalInstallation(
     // SDK". Using the Flutter tool keeps the launch consistent with how
     // dependencies are resolved in [_updateDependencies].
     final useFlutter = localInstallation.requiresFlutter;
+    final sdkPath = localConfig?.sdkPath;
     _debug(
       'Launching local installation via '
       '"${useFlutter ? 'flutter pub run' : 'dart run'}" '
@@ -766,8 +813,11 @@ Future<void> _launchFromGlobalInstallation(
       'local version: ${localInstallation.version}, '
       'global version: ${globalInstallation.version}).',
     );
+    if (sdkPath != null) {
+      _debug('Using SDK at $sdkPath.');
+    }
     final process = await Process.start(
-      useFlutter ? 'flutter' : 'dart',
+      _sdkTool(sdkPath, useFlutter ? 'flutter' : 'dart'),
       [
         if (useFlutter) 'pub',
         'run',
@@ -779,6 +829,7 @@ Future<void> _launchFromGlobalInstallation(
       ],
       mode: ProcessStartMode.inheritStdio,
       workingDirectory: localInstallation.packageRoot.path,
+      environment: _sdkEnvironment(sdkPath),
       // Necessary so that `dart.bat`/`flutter.bat` wrapper can be found on
       // Windows.
       runInShell: Platform.isWindows,
